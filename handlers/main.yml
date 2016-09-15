@@ -1,0 +1,10 @@
+---
+# handlers file for setvm
+
+- name: restart ntpd
+  service: name=ntpd state=started enabled=yes
+  when: ansible_distribution == "RedHat" or ansible_distribution == "CentOS"
+
+- name: restart ntp
+  service: name=ntp state=started enabled=yes
+  when: ansible_os_family == "Debian"

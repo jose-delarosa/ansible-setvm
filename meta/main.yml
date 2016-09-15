@@ -1,0 +1,26 @@
+---
+galaxy_info:
+  author: Jose De la Rosa
+  description: Senior Linux Software Engineer
+  company: Dell EMC
+  license: MIT
+  min_ansible_version: 1.6
+  platforms:
+  - name: EL
+    versions:
+    - 6
+    - 7
+  - name: Fedora
+    versions:
+    - 23
+    - 24
+  - name: Ubuntu
+    versions:
+    - precise
+    - trusty
+    - xenial
+  - name: Debian
+    versions:
+    - jessie
+  galaxy_tags: [setup, ntp]
+dependencies: []

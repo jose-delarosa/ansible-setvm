@@ -1,0 +1,7 @@
+---
+# defaults file for setvm
+
+# these are specific to me
+ntp_server: littleblue.linuxdev.us.dell.com
+work_server: geeko.linuxdev.us.dell.com
+home_server: solo.dlr.com

@@ -1,0 +1,154 @@
+#!/bin/bash
+# Point to OS repo
+
+createfile=1
+fflag=0			# fail flag
+cflag=0			# CentOS flag
+arch=`uname -i`
+
+repofile=/etc/yum.repos.d/os.repo
+f=/etc/os-release
+r=/etc/redhat-release
+u=/etc/apt/sources.list
+
+# Define hosts at (w)ork and (h)ome. Set repo host based on host domain name.
+whost={{ work_server }}
+hhost={{ home_server }}
+[ `hostname | cut -d. -f2- | grep dlr.com` ] && host=$hhost || host=$whost
+repourl=http://$host/pub
+
+read_redhat_release() {
+   # Looks for OS version
+   myline=`cat $r`
+   re='^[0-9]+([.][0-9]+)?([.][0-9]+)?$'
+   for item in $myline ; do
+      if ! [[ $item =~ $re ]] ; then
+         # echo "$item is not a number" >&2
+         continue
+      else
+         dmaj=`echo $item | cut -d"." -f1`
+         dmin=`echo $item | cut -d"." -f2`
+         break
+      fi
+   done
+   return
+}
+
+getdistro() {
+   # redhat-release
+   if [ -f $r ] ; then
+      dnam=`cat $r | awk '{print $1}'`
+      [ $dnam = "Red" ] && dnam="RHEL"		# adjust name
+      [ $dnam = "CentOS" ] && cflag=1		# we'll need this later
+      read_redhat_release
+   elif [ -f $u ] ; then			# this seems incomplete
+      dnam="Ubuntu"
+      dmaj=1					# need it so we don't fail
+      dmin=1
+   fi
+   return
+}
+
+setrepo() {
+   if echo $dnam | grep -qi "RHEL"; then
+      if [ $dmaj -eq 6 -o $dmaj -eq 7 ] ; then
+         baseurl=$repourl/redhat/RHEL$dmaj/$dmaj.$dmin/Server/\$basearch/os/
+      else
+         fflag=1
+      fi
+   elif echo $dnam | grep -qi "CentOS"; then
+      if [ $dmaj -eq 6 -o $dmaj -eq 7 ] ; then
+         baseurl=$repourl/Distros/centos/partners.centos.com/$dmaj/os/$arch/
+         echo "Removing original repository files"
+         rm -f /etc/yum.repos.d/CentOS-* 1> /dev/null 2>&1
+      else
+         fflag=1
+      fi
+   elif echo $dnam | grep -qi "fedora"; then
+      if echo $host | grep -qi "linuxdev"; then
+         createfile=0
+         cd /etc/yum.repos.d/
+         sed -i -e 's/^#base/base/' \
+             -e 's/^metalink/#metalink/' \
+             -e 's/download.fedora.redhat.com/linuxlib.us.dell.com/' \
+             -e 's/download.fedoraproject.org/linuxlib.us.dell.com/' \
+              *
+      fi
+   elif echo $dnam | grep -qi "ubuntu"; then
+      if echo $host | grep -qi "linuxdev"; then
+         createfile=0
+         [ ! -u ${u}.orig ] && cp $u ${u}.orig
+         sed -i -e "s|us.archive.ubuntu.com|$host|" \
+             -e "s|archive.ubuntu.com|$host|" \
+             -e "s|security.ubuntu.com|$host|" $u
+      fi
+   else
+      fflag=1
+   fi
+}
+
+printfail() {
+   echo "Sorry, this OS release is not supported."
+   exit 0
+}
+
+createrepofile() {
+   # remove spaces from $dnam because we can't have them in repo config file
+   name=`echo $dnam | sed 's/ //g'`
+   cat > $repofile << EOF
+[${name}${dmaj}${dmin}]
+name=${dnam}${dmaj}${dmin} repository
+baseurl=${baseurl}
+gpgcheck=0
+enabled=1
+EOF
+
+   # Don't do this at home
+   if [ $cflag -eq 1 -a $host != $hhost ] ; then
+      # For CentOS, need to add updates too
+      baseurl=`echo $baseurl | sed 's/\/os/\/updates/g'`
+      cat >> $repofile << EOF
+
+[${name}${dmaj}${dmin}-updates]
+name=${dnam}${dmaj}${dmin} repository updates
+baseurl=${baseurl}
+gpgcheck=0
+enabled=1
+EOF
+   fi
+
+   echo "Done! Resetting cache..."
+   sleep 1
+   yum clean all
+   yum makecache
+}
+
+# main()
+
+# Even in Ubuntu we have $f
+if [ ! -f $f -a ! -f $r ] ; then
+   echo "$f or $r not found! Exiting."
+   exit 0
+fi
+
+if [ $# -eq 1 ] ; then
+   [ $1 = "-f" ] && rm -f $repofile
+fi
+
+if [ -f $repofile ] ; then
+   echo "$repofile already exists! Use -f to override."
+   exit 0
+fi
+
+getdistro
+if [ X"$dnam" = X -o X"$dmaj" = X ] ; then
+   echo "There was a problem getting release name or version."
+   exit 1
+fi
+
+setrepo
+[ $fflag -eq 1 ] && printfail
+[ $createfile -eq 1 ] && createrepofile
+echo "Done!"
+
+# 2016.07.12 10:15:28 - JD

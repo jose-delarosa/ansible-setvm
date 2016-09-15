@@ -1,0 +1,52 @@
+---
+# tasks file for setvm
+
+- name: copy fixrepo.sh
+  template: src=fixrepo.sh.j2 dest=/tmp/fixrepo.sh owner=root mode=700
+
+- command: /tmp/fixrepo.sh
+- file: path=/tmp/fixrepo.sh state=absent
+
+- name: setup motd
+  copy: src=motd dest=/etc/motd owner=root group=root mode=0644
+
+- name: upgrade packages on RHEL/CentOS - yum
+  yum: name=* state=latest
+  when: ansible_distribution == "RedHat" or ansible_distribution == "CentOS"
+
+- name: upgrade packages on Debian/Ubuntu
+  apt: update_cache=yes cache_valid_time=3600 upgrade=dist
+  when: ansible_os_family == "Debian"
+
+- name: install required packages
+  action: >
+    {{ ansible_pkg_mgr }} name={{ item }} state=present update_cache=yes
+  with_items:
+    - nmap
+    - unzip
+    - wget
+    - ntp
+    - git
+
+- name: copy ntp template file on RHEL/CentOS
+  template: src=ntp-rhel.conf.j2 dest=/etc/ntp.conf
+  notify:
+  - restart ntpd
+  when: ansible_distribution == "RedHat" or ansible_distribution == "CentOS"
+
+- name: copy ntp template file on Debian/Ubuntu
+  template: src=ntp-debian.conf.j2 dest=/etc/ntp.conf
+  notify:
+  - restart ntp
+  when: ansible_os_family == "Debian"
+
+- name: get RAM
+  debug: msg="{{ inventory_hostname }} = {{ ansible_memtotal_mb }} MB RAM"
+
+- name: get vCPUs
+  debug: msg="vCPU = {{ ansible_processor_vcpus }}"
+
+- name: get distro version
+  debug: >
+      msg="Distro = {{ ansible_distribution }}
+      {{ ansible_distribution_major_version }}"

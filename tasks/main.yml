@@ -1,0 +1,5 @@
+---
+# tasks file for setvm
+
+- include: run.yml
+  when: ansible_virtualization_role == "guest"
